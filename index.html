@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>건강한 식재료 라벨 검사기</title>
+    <style>
+        body { font-family: 'Pretendard', sans-serif; padding: 20px; text-align: center; background-color: #f4f7f6; color: #333; margin: 0; }
+        h1 { font-size: 24px; color: #2c3e50; }
+        .upload-btn { display: inline-block; padding: 15px 30px; font-size: 18px; font-weight: bold; border-radius: 12px; background-color: #27ae60; color: white; border: none; cursor: pointer; margin-top: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .upload-btn:active { transform: scale(0.98); }
+        #loading { display: none; margin-top: 30px; font-weight: bold; color: #2980b9; }
+        #result-container { display: none; margin-top: 30px; text-align: left; background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        
+        /* Status Colors */
+        .status-danger { border-top: 8px solid #e74c3c; background-color: #fdf2f2; }
+        .status-warning { border-top: 8px solid #f1c40f; background-color: #fffdf5; }
+        .status-safe { border-top: 8px solid #2ecc71; background-color: #f4fcf7; }
+        
+        .status-title { font-size: 22px; font-weight: bold; margin-top: 0; }
+        .status-danger .status-title { color: #c0392b; }
+        .status-warning .status-title { color: #d35400; }
+        .status-safe .status-title { color: #27ae60; }
+
+        .section-title { font-size: 18px; font-weight: bold; margin-top: 20px; border-bottom: 2px solid #eee; padding-bottom: 5px; }
+        
+        .term-item { margin-bottom: 15px; }
+        .term-name { font-weight: bold; font-size: 16px; display: block; margin-bottom: 5px; }
+        .hashtag { display: inline-block; background: #e2e8f0; color: #475569; padding: 4px 10px; border-radius: 20px; margin-right: 5px; font-size: 13px; font-weight: 500; }
+        .hashtag.bad { background: #fee2e2; color: #991b1b; }
+        
+        ul { padding-left: 20px; margin-top: 10px; font-size: 15px; line-height: 1.5; }
+    </style>
+</head>
+<body>
+    <h1>🔍 식품 라벨 검사기</h1>
+    <p>식품 뒷면의 <strong>원재료명</strong>을 촬영해주세요.</p>
+    
+    <input type="file" id="camera-input" accept="image/*" capture="environment" style="display: none;">
+    <button class="upload-btn" onclick="document.getElementById('camera-input').click();">📸 사진 찍기 및 분석</button>
+
+    <div id="loading">AI가 성분표를 분석 중입니다... ⏳</div>
+    
+    <div id="result-container">
+        <!-- 결과가 여기에 렌더링됩니다 -->
+    </div>
+
+    <script>
+        document.getElementById('camera-input').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('result-container').style.display = 'none';
+
+            const reader = new FileReader();
+            reader.onloadend = async () => {
+                const base64Image = reader.result.split(',')[1];
+                
+                try {
+                    const response = await fetch('/api/generate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ image: base64Image })
+                    });
+                    
+                    if (!response.ok) throw new Error('API Error');
+                    const data = await response.json();
+                    renderResult(data);
+                } catch (error) {
+                    alert('분석 중 오류가 발생했습니다. 다시 시도해주세요.');
+                    console.error(error);
+                } finally {
+                    document.getElementById('loading').style.display = 'none';
+                }
+            };
+            reader.readAsDataURL(file);
+        });
+
+        function renderResult(data) {
+            const container = document.getElementById('result-container');
+            container.style.display = 'block';
+            container.className = `status-${data.status}`; // status-danger, status-warning, status-safe
+            
+            let statusText = '';
+            if (data.status === 'danger') statusText = '🚨 경고: 주의가 필요한 식품입니다!';
+            else if (data.status === 'warning') statusText = '⚠️ 주의: 첨가물이 일부 포함되어 있습니다.';
+            else statusText = '✅ 통과: 비교적 안전한 식품입니다.';
+
+            let html = `<p class="status-title">${statusText}</p>`;
+            
+            if (data.reasons && data.reasons.length > 0) {
+                html += `<div class="section-title">판단 사유</div><ul>`;
+                data.reasons.forEach(reason => html += `<li>${reason}</li>`);
+                html += `</ul>`;
+            }
+
+            if (data.terms && data.terms.length > 0) {
+                html += `<div class="section-title">어려운 용어 해설</div>`;
+                data.terms.forEach(term => {
+                    html += `<div class="term-item">
+                                <span class="term-name">${term.name}</span>`;
+                    term.hashtags.forEach(tag => {
+                        html += `<span class="hashtag">${tag}</span>`;
+                    });
+                    html += `</div>`;
+                });
+            }
+
+            container.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
