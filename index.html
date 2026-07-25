@@ -55,11 +55,15 @@
         import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 
         // TODO: 본인의 Firebase 프로젝트 설정값으로 교체하세요.
-        const firebaseConfig = {
-            apiKey: "YOUR_FIREBASE_API_KEY",
-            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-            projectId: "YOUR_PROJECT_ID"
-        };
+          const firebaseConfig = {
+            apiKey: "AIzaSyAqNMgUizVYOoZ_uM12JBcEYjfsdD2Up60",
+            authDomain: "food-additives-b9a6f.firebaseapp.com",
+            projectId: "food-additives-b9a6f",
+            storageBucket: "food-additives-b9a6f.firebasestorage.app",
+            messagingSenderId: "1091978124666",
+            appId: "1:1091978124666:web:8aa031c0cc3774499a4ac3",
+            measurementId: "G-4WH2DQDF4X"
+         };
 
         // Firebase 초기화 (설정값이 비어있으면 실행하지 않음)
         let db = null;
