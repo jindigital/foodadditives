@@ -8,13 +8,11 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'No image provided' });
     }
 
-    // Vercel 환경변수에서 API 키 로드
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-        return res.status(500).json({ error: 'API key is missing' });
+        return res.status(500).json({ error: 'Vercel 환경변수에 GEMINI_API_KEY가 없습니다.' });
     }
     
-    // Gemini 1.5 Flash 모델 엔드포인트
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
     const prompt = `
@@ -39,11 +37,11 @@ export default async function handler(req, res) {
     [응답 JSON 양식]
     {
       "status": "danger" | "warning" | "safe",
-      "reasons": ["상태를 이렇게 판정한 구체적인 이유 1 (예: 맨 앞 5개 성분에 팜유가 포함됨)", "이유 2"],
+      "reasons": ["이유 1", "이유 2"],
       "terms": [
         {
-          "name": "어려운 성분명 (예: L-글루탐산나트륨)",
-          "hashtags": ["#키워드1", "#키워드2", "#키워드3"] // 해시태그는 반드시 3개 이하
+          "name": "어려운 성분명",
+          "hashtags": ["#키워드1", "#키워드2", "#키워드3"]
         }
       ]
     }
@@ -65,7 +63,15 @@ export default async function handler(req, res) {
 
         const data = await response.json();
         
-        // Gemini 응답에서 텍스트 추출 및 JSON 파싱
+        // 💡 [수정된 부분] 정상적인 응답(candidates)이 없는 경우의 에러 방어 로직
+        if (!data.candidates || data.candidates.length === 0) {
+            console.error('구글 Gemini API가 거절했습니다. 상세 이유:', data);
+            return res.status(500).json({ 
+                error: 'AI 분석 실패', 
+                details: data.error ? data.error.message : '알 수 없는 API 에러' 
+            });
+        }
+        
         let rawText = data.candidates[0].content.parts[0].text;
         rawText = rawText.replace(/```json/gi, '').replace(/```/gi, '').trim();
         
@@ -73,7 +79,7 @@ export default async function handler(req, res) {
         res.status(200).json(resultJson);
 
     } catch (error) {
-        console.error('API Error:', error);
+        console.error('서버 내부 에러:', error);
         res.status(500).json({ error: 'Failed to analyze image' });
     }
 }
