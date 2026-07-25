@@ -8,11 +8,10 @@
         body { font-family: 'Pretendard', sans-serif; padding: 20px; text-align: center; background-color: #f4f7f6; color: #333; margin: 0; }
         h1 { font-size: 24px; color: #2c3e50; }
         .upload-btn { display: inline-block; padding: 15px 30px; font-size: 18px; font-weight: bold; border-radius: 12px; background-color: #27ae60; color: white; border: none; cursor: pointer; margin-top: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .upload-btn:active { transform: scale(0.98); }
+        .history-btn { display: inline-block; padding: 10px 20px; font-size: 16px; font-weight: bold; border-radius: 12px; background-color: #34495e; color: white; border: none; cursor: pointer; margin-top: 10px; }
         #loading { display: none; margin-top: 30px; font-weight: bold; color: #2980b9; }
-        #result-container { display: none; margin-top: 30px; text-align: left; background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        #result-container, #history-container { display: none; margin-top: 30px; text-align: left; background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
         
-        /* Status Colors */
         .status-danger { border-top: 8px solid #e74c3c; background-color: #fdf2f2; }
         .status-warning { border-top: 8px solid #f1c40f; background-color: #fffdf5; }
         .status-safe { border-top: 8px solid #2ecc71; background-color: #f4fcf7; }
@@ -27,9 +26,10 @@
         .term-item { margin-bottom: 15px; }
         .term-name { font-weight: bold; font-size: 16px; display: block; margin-bottom: 5px; }
         .hashtag { display: inline-block; background: #e2e8f0; color: #475569; padding: 4px 10px; border-radius: 20px; margin-right: 5px; font-size: 13px; font-weight: 500; }
-        .hashtag.bad { background: #fee2e2; color: #991b1b; }
         
         ul { padding-left: 20px; margin-top: 10px; font-size: 15px; line-height: 1.5; }
+        .history-item { border-bottom: 1px solid #ddd; padding: 10px 0; }
+        .history-date { font-size: 12px; color: #7f8c8d; }
     </style>
 </head>
 <body>
@@ -38,20 +38,47 @@
     
     <input type="file" id="camera-input" accept="image/*" capture="environment" style="display: none;">
     <button class="upload-btn" onclick="document.getElementById('camera-input').click();">📸 사진 찍기 및 분석</button>
+    <br>
+    <button class="history-btn" id="load-history-btn">🕒 이전 분석 기록 보기</button>
 
     <div id="loading">AI가 성분표를 분석 중입니다... ⏳</div>
     
-    <div id="result-container">
-        <!-- 결과가 여기에 렌더링됩니다 -->
+    <div id="result-container"></div>
+    <div id="history-container">
+        <h2 class="section-title">최근 분석 기록</h2>
+        <div id="history-list"></div>
     </div>
 
-    <script>
+    <!-- Firebase 모듈 로드 -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+
+        // TODO: 본인의 Firebase 프로젝트 설정값으로 교체하세요.
+        const firebaseConfig = {
+            apiKey: "YOUR_FIREBASE_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID"
+        };
+
+        // Firebase 초기화 (설정값이 비어있으면 실행하지 않음)
+        let db = null;
+        try {
+            if (firebaseConfig.apiKey !== "YOUR_FIREBASE_API_KEY") {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+            }
+        } catch (e) {
+            console.log("Firebase 초기화 에러:", e);
+        }
+
         document.getElementById('camera-input').addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
 
             document.getElementById('loading').style.display = 'block';
             document.getElementById('result-container').style.display = 'none';
+            document.getElementById('history-container').style.display = 'none';
 
             const reader = new FileReader();
             reader.onloadend = async () => {
@@ -66,10 +93,24 @@
                     
                     if (!response.ok) throw new Error('API Error');
                     const data = await response.json();
+                    
                     renderResult(data);
+
+                    // 파이어베이스에 결과 저장
+                    if (db) {
+                        try {
+                            await addDoc(collection(db, "food_scans"), {
+                                status: data.status,
+                                reasons: data.reasons || [],
+                                timestamp: new Date().toISOString()
+                            });
+                        } catch (err) {
+                            console.error("기록 저장 실패", err);
+                        }
+                    }
+
                 } catch (error) {
                     alert('분석 중 오류가 발생했습니다. 다시 시도해주세요.');
-                    console.error(error);
                 } finally {
                     document.getElementById('loading').style.display = 'none';
                 }
@@ -77,10 +118,44 @@
             reader.readAsDataURL(file);
         });
 
+        document.getElementById('load-history-btn').addEventListener('click', async () => {
+            if (!db) {
+                alert("Firebase 설정이 필요합니다. 코드의 firebaseConfig를 수정해주세요.");
+                return;
+            }
+            
+            const historyList = document.getElementById('history-list');
+            historyList.innerHTML = '불러오는 중...';
+            document.getElementById('history-container').style.display = 'block';
+            document.getElementById('result-container').style.display = 'none';
+
+            try {
+                const q = query(collection(db, "food_scans"), orderBy("timestamp", "desc"), limit(10));
+                const querySnapshot = await getDocs(q);
+                
+                let html = '';
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const date = new Date(data.timestamp).toLocaleString();
+                    const statusKor = data.status === 'danger' ? '🚨 경고' : (data.status === 'warning' ? '⚠️ 주의' : '✅ 안전');
+                    
+                    html += `<div class="history-item">
+                        <div class="history-date">${date}</div>
+                        <strong>${statusKor}</strong>: ${data.reasons.length > 0 ? data.reasons[0] : '특이사항 없음'}
+                    </div>`;
+                });
+                
+                historyList.innerHTML = html || '기록이 없습니다.';
+            } catch (error) {
+                console.error("기록 불러오기 실패", error);
+                historyList.innerHTML = '기록을 불러오는데 실패했습니다.';
+            }
+        });
+
         function renderResult(data) {
             const container = document.getElementById('result-container');
             container.style.display = 'block';
-            container.className = `status-${data.status}`; // status-danger, status-warning, status-safe
+            container.className = `status-${data.status}`;
             
             let statusText = '';
             if (data.status === 'danger') statusText = '🚨 경고: 주의가 필요한 식품입니다!';
@@ -98,11 +173,8 @@
             if (data.terms && data.terms.length > 0) {
                 html += `<div class="section-title">어려운 용어 해설</div>`;
                 data.terms.forEach(term => {
-                    html += `<div class="term-item">
-                                <span class="term-name">${term.name}</span>`;
-                    term.hashtags.forEach(tag => {
-                        html += `<span class="hashtag">${tag}</span>`;
-                    });
+                    html += `<div class="term-item"><span class="term-name">${term.name}</span>`;
+                    term.hashtags.forEach(tag => { html += `<span class="hashtag">${tag}</span>`; });
                     html += `</div>`;
                 });
             }
