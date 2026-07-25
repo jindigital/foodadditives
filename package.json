@@ -1,7 +1,0 @@
-{
-  "name": "food-label-scanner",
-  "version": "1.0.0",
-  "scripts": {
-    "start": "echo 'Run on Vercel'"
-  }
-}
