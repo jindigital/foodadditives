@@ -54,8 +54,8 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
         import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 
-        // TODO: 본인의 Firebase 프로젝트 설정값으로 교체하세요.
-          const firebaseConfig = {
+        // 사용자의 Firebase 프로젝트 설정값
+        const firebaseConfig = {
             apiKey: "AIzaSyAqNMgUizVYOoZ_uM12JBcEYjfsdD2Up60",
             authDomain: "food-additives-b9a6f.firebaseapp.com",
             projectId: "food-additives-b9a6f",
@@ -63,15 +63,12 @@
             messagingSenderId: "1091978124666",
             appId: "1:1091978124666:web:8aa031c0cc3774499a4ac3",
             measurementId: "G-4WH2DQDF4X"
-         };
+        };
 
-        // Firebase 초기화 (설정값이 비어있으면 실행하지 않음)
         let db = null;
         try {
-            if (firebaseConfig.apiKey !== "YOUR_FIREBASE_API_KEY") {
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-            }
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
         } catch (e) {
             console.log("Firebase 초기화 에러:", e);
         }
@@ -85,46 +82,66 @@
             document.getElementById('history-container').style.display = 'none';
 
             const reader = new FileReader();
-            reader.onloadend = async () => {
-                const base64Image = reader.result.split(',')[1];
-                
-                try {
-                    const response = await fetch('/api/generate', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ image: base64Image })
-                    });
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = async function() {
+                    // 1. 이미지 리사이징 (가로 최대 800px로 축소하여 용량 최적화)
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 800;
+                    let scaleSize = 1;
                     
-                    if (!response.ok) throw new Error('API Error');
-                    const data = await response.json();
-                    
-                    renderResult(data);
-
-                    // 파이어베이스에 결과 저장
-                    if (db) {
-                        try {
-                            await addDoc(collection(db, "food_scans"), {
-                                status: data.status,
-                                reasons: data.reasons || [],
-                                timestamp: new Date().toISOString()
-                            });
-                        } catch (err) {
-                            console.error("기록 저장 실패", err);
-                        }
+                    if (img.width > MAX_WIDTH) {
+                        scaleSize = MAX_WIDTH / img.width;
                     }
+                    
+                    canvas.width = img.width * scaleSize;
+                    canvas.height = img.height * scaleSize;
 
-                } catch (error) {
-                    alert('분석 중 오류가 발생했습니다. 다시 시도해주세요.');
-                } finally {
-                    document.getElementById('loading').style.display = 'none';
-                }
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                    // 2. 용량을 줄인 이미지를 base64 텍스트로 변환 (화질 80%)
+                    const base64Image = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+                    
+                    try {
+                        const response = await fetch('/api/generate', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ image: base64Image })
+                        });
+                        
+                        if (!response.ok) throw new Error('API Error');
+                        const data = await response.json();
+                        
+                        renderResult(data);
+
+                        // 파이어베이스에 결과 저장
+                        if (db) {
+                            try {
+                                await addDoc(collection(db, "food_scans"), {
+                                    status: data.status,
+                                    reasons: data.reasons || [],
+                                    timestamp: new Date().toISOString()
+                                });
+                            } catch (err) {
+                                console.error("기록 저장 실패", err);
+                            }
+                        }
+
+                    } catch (error) {
+                        alert('분석 중 오류가 발생했습니다. 다시 시도해주세요.');
+                    } finally {
+                        document.getElementById('loading').style.display = 'none';
+                    }
+                };
+                img.src = event.target.result;
             };
             reader.readAsDataURL(file);
         });
 
         document.getElementById('load-history-btn').addEventListener('click', async () => {
             if (!db) {
-                alert("Firebase 설정이 필요합니다. 코드의 firebaseConfig를 수정해주세요.");
+                alert("Firebase 설정에 문제가 있습니다.");
                 return;
             }
             
