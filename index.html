@@ -218,10 +218,10 @@
         <div style="font-weight: 600; color: #1F2937;">AI가 라벨을 분석 중입니다...</div>
     </div>
 
-    <!-- Firebase 모듈 -->
+    <!-- Firebase 모듈 (삭제 로직을 위한 모듈 추가) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyAqNMgUizVYOoZ_uM12JBcEYjfsdD2Up60",
@@ -263,14 +263,12 @@
 
             document.getElementById('loading-overlay').style.display = 'flex';
 
-            // 카메라 사용 시 메모리 부족으로 튕기는 현상을 막기 위해 약간의 시간(100ms)을 확보합니다.
             setTimeout(() => {
                 const reader = new FileReader();
                 reader.onload = function(event) {
                     const img = new Image();
                     img.onload = async function() {
                         const canvas = document.createElement('canvas');
-                        // 메모리 최적화를 위해 MAX_WIDTH를 800에서 600으로 낮추었습니다.
                         const MAX_WIDTH = 600;
                         let scaleSize = 1;
                         if (img.width > MAX_WIDTH) scaleSize = MAX_WIDTH / img.width;
@@ -295,15 +293,31 @@
                             renderResult(data);
 
                             try {
+                                // 1. 새로운 분석 기록 저장
                                 await addDoc(collection(db, "food_scans"), {
                                     product_name: data.product_name || "알 수 없는 제품",
                                     status: data.status,
                                     reasons: data.reasons || [],
                                     timestamp: new Date().toISOString()
                                 });
-                            } catch (err) { console.error("기록 저장 실패", err); }
+
+                                // 2. [새로 추가된 로직] 데이터 50개 초과 시 오래된 기록 삭제
+                                const scanQuery = query(collection(db, "food_scans"), orderBy("timestamp", "desc"));
+                                const snapshot = await getDocs(scanQuery);
+                                
+                                if (snapshot.size > 50) {
+                                    let count = 1;
+                                    snapshot.forEach(async (docItem) => {
+                                        if (count > 50) {
+                                            await deleteDoc(doc(db, "food_scans", docItem.id));
+                                        }
+                                        count++;
+                                    });
+                                }
+                            } catch (err) { 
+                                console.error("기록 저장 또는 삭제 실패", err); 
+                            }
                             
-                            // 분석이 완벽히 성공했을 때만 결과 화면으로 이동합니다.
                             window.nav('result');
                             
                         } catch (error) {
@@ -339,11 +353,9 @@
                 <div class="summary-text">💡 핵심 키워드 : ${shortSummary}</div>
             `;
             
-            // 토글 영역 내부에 주의 대상(Target) 내용 추가
             if (data.reasons && data.reasons.length > 0) {
                 let detailHtml = '';
                 
-                // 해당 없음이 아닐 경우 빨간색 경고 박스로 표시
                 if (data.warning_target && data.warning_target !== '해당 없음') {
                     detailHtml += `<div class="target-box">
                                       <span class="material-symbols-outlined" style="font-size: 18px;">error</span>
