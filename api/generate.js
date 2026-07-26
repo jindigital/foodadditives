@@ -36,7 +36,7 @@ export default async function handler(req, res) {
     {
       "product_name": "추출한 제품명",
       "status": "danger" | "warning" | "safe",
-      "reasons": ["상태를 판정한 이유 1", "이유 2"],
+      "reasons": ["상태를 판정한 사유를 긴 문장으로 쓰지 말고, 반드시 핵심 성분명이나 단어 형태의 키워드로만 작성할 것. (예: 팜유, 수크랄로스, 화학첨가물 5개, 특이사항 없음)"],
       "terms": [
         {
           "name": "어려운 성분명",
