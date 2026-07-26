@@ -21,7 +21,7 @@ export default async function handler(req, res) {
     const keyPrefix = apiKey.substring(0, 5);
     console.log(`현재 서버에 적용된 API 키 앞자리: ${keyPrefix}...`);
 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
 
     const prompt = `
     너는 식품 영양 및 성분 분석 전문가야. 다음 식품 라벨 이미지를 분석하고 JSON 형식으로만 응답해. 마크다운(\`\`\`) 없이 순수 JSON만 반환해.
