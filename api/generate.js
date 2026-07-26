@@ -8,11 +8,19 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'No image provided' });
     }
 
+    // [디버깅 추가] Vercel이 키를 정상적으로 읽어왔는지 확인
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-        return res.status(500).json({ error: 'Vercel 환경변수에 GEMINI_API_KEY가 없습니다.' });
+        return res.status(500).json({ 
+            error: 'Vercel 환경변수 누락', 
+            details: 'Vercel 설정에 GEMINI_API_KEY가 등록되지 않았거나, 재배포(Redeploy)가 되지 않았습니다.' 
+        });
     }
     
+    // [디버깅 추가] 키 값의 앞 5자리만 출력하여 제대로 된 키인지 확인 (보안상 앞자리만 노출)
+    const keyPrefix = apiKey.substring(0, 5);
+    console.log(`현재 서버에 적용된 API 키 앞자리: ${keyPrefix}...`);
+
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
     const prompt = `
@@ -37,11 +45,11 @@ export default async function handler(req, res) {
     [응답 JSON 양식]
     {
       "status": "danger" | "warning" | "safe",
-      "reasons": ["이유 1", "이유 2"],
+      "reasons": ["상태를 이렇게 판정한 구체적인 이유 1 (예: 맨 앞 5개 성분에 팜유가 포함됨)", "이유 2"],
       "terms": [
         {
-          "name": "어려운 성분명",
-          "hashtags": ["#키워드1", "#키워드2", "#키워드3"]
+          "name": "어려운 성분명 (예: L-글루탐산나트륨)",
+          "hashtags": ["#키워드1", "#키워드2", "#키워드3"] // 해시태그는 반드시 3개 이하
         }
       ]
     }
@@ -63,7 +71,7 @@ export default async function handler(req, res) {
 
         const data = await response.json();
         
-        // 💡 [수정된 부분] 정상적인 응답(candidates)이 없는 경우의 에러 방어 로직
+        // 에러 방어 로직
         if (!data.candidates || data.candidates.length === 0) {
             console.error('구글 Gemini API가 거절했습니다. 상세 이유:', data);
             return res.status(500).json({ 
