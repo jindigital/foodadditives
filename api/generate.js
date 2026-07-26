@@ -13,7 +13,7 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: 'Vercel 환경변수 누락' });
     }
 
-    // 최신 Gemini 3 Flash 모델 유지
+    // 최신 Gemini 3 Flash 모델 적용
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
 
     const prompt = `
